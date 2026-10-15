@@ -12,7 +12,7 @@ const OUT_DIR = process.env.OUT_DIR || "_site";
 
 const FEED = {
   title: "What's new in Workiro",
-  link: "https://example.com/whats-new",                  // human-facing page (set this)
+  link: "https://app.workiro.com/settings/whatsnew",                  // human-facing page (set this)
   self: "https://workiro.github.io/whats-new/feed.xml",    // this feed's URL
   site: "https://workiro.github.io/whats-new/",            // landing page (index.html)
   description: "Product updates from Workiro",
