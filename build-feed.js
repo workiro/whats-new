@@ -12,7 +12,7 @@ const OUT_DIR = process.env.OUT_DIR || "_site";
 
 const FEED = {
   title: "What's new in Workiro",
-  link: "https://app.workiro.com/settings/whatsnew",                  // human-facing page (set this)
+  link: "https://example.com/whats-new",                  // human-facing page (set this)
   self: "https://workiro.github.io/whats-new/feed.xml",    // this feed's URL
   site: "https://workiro.github.io/whats-new/",            // landing page (index.html)
   description: "Product updates from Workiro",
@@ -96,9 +96,37 @@ ${itemXml}
 const fmtDate = (d) =>
   d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
+// Brand assets, downloaded at build time and served from this site, so visitors
+// make no requests to third parties. If a download fails the page still builds:
+// the logo falls back to a text wordmark and the favicon is omitted.
+const BRAND = {
+  logoUrl: "https://cdn.prod.website-files.com/6512a8b117cf6f7907ce200e/696d1021e260324cfce27841_Group%20290637.svg",
+  iconUrl: "https://cdn.prod.website-files.com/652d1737a649f74737889bff/6564855d8efe08d77c2e3eed_Full%20Colour%20Icon.png",
+  home: "https://www.workiro.com/",
+  help: "https://help.workiro.com/hc/en-gb",
+  // Set to Workiro's web font once confirmed, e.g. '"Font Name", system-ui, sans-serif'.
+  // If it comes from Google Fonts, also set fontCssUrl to the stylesheet URL.
+  fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  fontCssUrl: "",
+};
+
+async function download(url, dest) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    fs.writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
+    return true;
+  } catch (err) {
+    console.warn(`Asset not downloaded (${url}): ${err.message}`);
+    return false;
+  }
+}
+
 // Landing page at the site root: RSS auto-discovery, a copy-the-feed-URL button,
-// and the latest updates grouped by release date.
-function buildIndex(items) {
+// and the latest updates grouped by release date. Styled to Workiro's brand:
+// Green #00B1B2 for fills, a darker green #007A7B for link text (5.2:1 on white),
+// Purple #7E49E7 for focus and hover.
+function buildIndex(items, assets) {
   const recent = items.slice(0, FEED.pageItems);
   const days = [];
   for (const i of recent) {
@@ -109,9 +137,12 @@ function buildIndex(items) {
 
   const dayHtml = days
     .map(
-      (d) => `
+      (d, n) => `
       <li class="day">
-        <time datetime="${d.date.toISOString().slice(0, 10)}">${fmtDate(d.date)}</time>
+        <div class="when">
+          <time datetime="${d.date.toISOString().slice(0, 10)}">${fmtDate(d.date)}</time>${n === 0 ? `
+          <span class="latest">Latest</span>` : ""}
+        </div>
         <div class="entries">${d.items
           .map(
             (i) => `
@@ -126,6 +157,10 @@ function buildIndex(items) {
     )
     .join("");
 
+  const brandMark = assets.logo
+    ? `<img src="logo.svg" alt="Workiro" width="132" height="32">`
+    : `<span class="wordmark">Workiro</span>`;
+
   return `<!doctype html>
 <html lang="en-GB">
 <head>
@@ -133,75 +168,90 @@ function buildIndex(items) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(FEED.title)}</title>
 <meta name="description" content="${esc(FEED.description)}. Subscribe with any RSS reader.">
-<link rel="alternate" type="application/rss+xml" title="${esc(FEED.title)}" href="${esc(FEED.self)}">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#00B1B2">
+<link rel="alternate" type="application/rss+xml" title="${esc(FEED.title)}" href="${esc(FEED.self)}">${assets.icon ? `
+<link rel="icon" type="image/png" href="favicon.png">` : ""}${BRAND.fontCssUrl ? `
+<link rel="stylesheet" href="${esc(BRAND.fontCssUrl)}">` : ""}
 <style>
   :root {
-    --paper: #ffffff;
-    --ink: #1c2430;
+    --green: #00b1b2;
+    --green-text: #007a7b;
+    --green-wash: #e6f7f7;
+    --purple: #7e49e7;
+    --ink: #14232c;
     --muted: #5a6472;
-    --rule: #dde2e8;
-    --accent: #0f6e6e;
-    --accent-ink: #ffffff;
-    --wash: #eef5f5;
-    color-scheme: light dark;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --paper: #12181f;
-      --ink: #e6ebf0;
-      --muted: #9aa5b1;
-      --rule: #2a333d;
-      --accent: #5cc2c2;
-      --accent-ink: #0b1a1a;
-      --wash: #17262a;
-    }
+    --rule: #e3e8ec;
+    --paper: #ffffff;
+    color-scheme: light;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     background: var(--paper);
     color: var(--ink);
-    font: 400 1.0625rem/1.6 Figtree, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font: 400 1.0625rem/1.6 ${BRAND.fontFamily};
   }
-  main { max-width: 46rem; margin: 0 auto; padding: 4rem 1.5rem 5rem; }
-  h1 { font-size: clamp(2.25rem, 6vw, 3.25rem); line-height: 1.05; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 1rem; }
+  .bar { border-bottom: 1px solid var(--rule); }
+  .bar-inner, main { max-width: 48rem; margin: 0 auto; padding-left: 1.5rem; padding-right: 1.5rem; }
+  .bar-inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 4.5rem; }
+  .bar img { display: block; height: 32px; width: auto; }
+  .wordmark { font-weight: 700; font-size: 1.5rem; letter-spacing: -0.02em; color: var(--ink); }
+  .bar a.home { text-decoration: none; }
+  .bar nav a { color: var(--muted); text-decoration: none; font-size: 0.95rem; }
+  .bar nav a:hover { color: var(--purple); }
+  main { padding-top: 3.5rem; padding-bottom: 5rem; }
+  h1 { font-size: clamp(2.25rem, 6vw, 3.25rem); line-height: 1.05; font-weight: 700; letter-spacing: -0.025em; margin: 0 0 1rem; }
   .lede { color: var(--muted); max-width: 34rem; margin: 0 0 2rem; }
-  .subscribe { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; padding: 1rem; background: var(--wash); border-radius: 10px; }
-  .subscribe code { flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere; font: 500 0.95rem/1.4 Figtree, system-ui, sans-serif; }
-  button, .button {
-    font: 500 0.95rem/1 Figtree, system-ui, sans-serif;
-    padding: 0.7rem 1rem; border-radius: 6px; cursor: pointer; text-decoration: none;
-    border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+  .subscribe {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem;
+    padding: 1rem 1rem 1rem 1.25rem; background: var(--green-wash);
+    border-left: 4px solid var(--green); border-radius: 0 10px 10px 0;
   }
-  .button.secondary { background: transparent; color: var(--accent); }
-  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .subscribe code { flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere; font: 500 0.95rem/1.4 ${BRAND.fontFamily}; }
+  button, .button {
+    font: 600 0.95rem/1 ${BRAND.fontFamily};
+    padding: 0.75rem 1.1rem; border-radius: 999px; cursor: pointer; text-decoration: none;
+    border: 2px solid var(--green); background: var(--green); color: var(--ink);
+  }
+  button:hover { background: #00c4c5; border-color: #00c4c5; }
+  .button.secondary { background: var(--paper); color: var(--ink); }
+  .button.secondary:hover { border-color: var(--purple); color: var(--purple); }
+  :focus-visible { outline: 3px solid var(--purple); outline-offset: 3px; }
   .hint { color: var(--muted); font-size: 0.9rem; margin: 0.75rem 0 0; }
   h2 { font-size: 1.25rem; margin: 4rem 0 1.5rem; }
   ol { list-style: none; margin: 0; padding: 0; }
   .day { display: grid; grid-template-columns: 9.5rem 1fr; gap: 1.5rem; padding: 1.75rem 0; border-top: 1px solid var(--rule); }
-  .day time { color: var(--muted); font-size: 0.95rem; font-variant-numeric: tabular-nums; padding-top: 0.2rem; }
+  .when { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; padding-top: 0.2rem; }
+  .when time { color: var(--muted); font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+  .latest { font-size: 0.8rem; font-weight: 600; padding: 0.15rem 0.6rem; border-radius: 999px; background: var(--green-wash); color: var(--green-text); }
   article + article { margin-top: 1.75rem; }
   h3 { font-size: 1.125rem; line-height: 1.35; margin: 0 0 0.4rem; }
   h3 a { color: var(--ink); text-decoration-color: var(--rule); text-underline-offset: 3px; }
-  h3 a:hover { text-decoration-color: var(--accent); }
+  h3 a:hover { color: var(--purple); text-decoration-color: var(--purple); }
   .body p { margin: 0 0 0.6rem; }
   .body ul { margin: 0 0 0.6rem; padding-left: 1.2rem; }
-  .body a { color: var(--accent); }
-  footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.95rem; }
-  footer a { color: var(--accent); }
+  .body a { color: var(--green-text); font-weight: 500; }
+  .body a:hover { color: var(--purple); }
+  footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.95rem; display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; }
+  footer a { color: var(--green-text); font-weight: 500; }
+  footer a:hover { color: var(--purple); }
   @media (max-width: 36rem) {
     main { padding-top: 2.5rem; }
     .day { grid-template-columns: 1fr; gap: 0.5rem; }
+    .when { flex-direction: row; align-items: center; }
   }
 </style>
 </head>
 <body>
+<header class="bar">
+  <div class="bar-inner">
+    <a class="home" href="${esc(BRAND.home)}">${brandMark}</a>
+    <nav><a href="${esc(BRAND.help)}">Help centre</a></nav>
+  </div>
+</header>
 <main>
-  <h1>${esc(FEED.title)}</h1>
-  <p class="lede">Get new features and improvements as they ship. Add the feed below to Slack or any RSS reader.</p>
+  <h1>What's new</h1>
+  <p class="lede">Get new Workiro features and improvements as they ship. Add the feed below to Slack or any RSS reader.</p>
 
   <div class="subscribe">
     <code id="feed-url">${esc(FEED.self)}</code>
@@ -216,6 +266,7 @@ function buildIndex(items) {
 
   <footer>
     <a href="${esc(FEED.link)}">See every update on the What's new page</a>
+    <a href="${esc(BRAND.home)}">workiro.com</a>
   </footer>
 </main>
 <script>
@@ -255,7 +306,11 @@ async function loadUpdates() {
   if (!items.length) throw new Error("No items found. Check SOURCE and database rules.");
   fs.mkdirSync(OUT_DIR, { recursive: true });
   fs.writeFileSync(path.join(OUT_DIR, "feed.xml"), buildFeed(items));
-  fs.writeFileSync(path.join(OUT_DIR, "index.html"), buildIndex(items));
+  const assets = {
+    logo: await download(BRAND.logoUrl, path.join(OUT_DIR, "logo.svg")),
+    icon: await download(BRAND.iconUrl, path.join(OUT_DIR, "favicon.png")),
+  };
+  fs.writeFileSync(path.join(OUT_DIR, "index.html"), buildIndex(items, assets));
   console.log(`Wrote ${items.length} items, newest ${items[0].date.toISOString().slice(0, 10)}`);
 })().catch((err) => {
   console.error(err.message);
