@@ -1,5 +1,5 @@
 // build-feed.js
-// Reads the What's New JSON and writes an RSS 2.0 feed to _site/feed.xml.
+// Reads the What's New JSON and writes _site/feed.xml (RSS 2.0) and _site/index.html (landing page).
 // Run locally:  SOURCE=./export.json node build-feed.js
 // In GitHub Actions SOURCE defaults to the public Firebase REST endpoint.
 
@@ -13,9 +13,11 @@ const OUT_DIR = process.env.OUT_DIR || "_site";
 const FEED = {
   title: "What's new in Workiro",
   link: "https://app.workiro.com/settings/whatsnew",                  // human-facing page (set this)
-  self: "https://workiro.github.io/whats-new/feed.xml",  // this feed's URL (set this)
+  self: "https://workiro.github.io/whats-new/feed.xml",    // this feed's URL
+  site: "https://workiro.github.io/whats-new/",            // landing page (index.html)
   description: "Product updates from Workiro",
-  maxItems: 50,
+  maxItems: 50,   // items in feed.xml
+  pageItems: 12,  // items shown on the landing page
 };
 
 const esc = (s = "") =>
@@ -91,6 +93,151 @@ ${itemXml}
 `;
 }
 
+const fmtDate = (d) =>
+  d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+
+// Landing page at the site root: RSS auto-discovery, a copy-the-feed-URL button,
+// and the latest updates grouped by release date.
+function buildIndex(items) {
+  const recent = items.slice(0, FEED.pageItems);
+  const days = [];
+  for (const i of recent) {
+    const last = days[days.length - 1];
+    if (last && last.date.getTime() === i.date.getTime()) last.items.push(i);
+    else days.push({ date: i.date, items: [i] });
+  }
+
+  const dayHtml = days
+    .map(
+      (d) => `
+      <li class="day">
+        <time datetime="${d.date.toISOString().slice(0, 10)}">${fmtDate(d.date)}</time>
+        <div class="entries">${d.items
+          .map(
+            (i) => `
+          <article>
+            <h3><a href="${esc(i.link)}">${esc(i.title)}</a></h3>
+            <div class="body">${i.html}</div>
+          </article>`
+          )
+          .join("")}
+        </div>
+      </li>`
+    )
+    .join("");
+
+  return `<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(FEED.title)}</title>
+<meta name="description" content="${esc(FEED.description)}. Subscribe with any RSS reader.">
+<link rel="alternate" type="application/rss+xml" title="${esc(FEED.title)}" href="${esc(FEED.self)}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #ffffff;
+    --ink: #1c2430;
+    --muted: #5a6472;
+    --rule: #dde2e8;
+    --accent: #0f6e6e;
+    --accent-ink: #ffffff;
+    --wash: #eef5f5;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12181f;
+      --ink: #e6ebf0;
+      --muted: #9aa5b1;
+      --rule: #2a333d;
+      --accent: #5cc2c2;
+      --accent-ink: #0b1a1a;
+      --wash: #17262a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 400 1.0625rem/1.6 Figtree, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 46rem; margin: 0 auto; padding: 4rem 1.5rem 5rem; }
+  h1 { font-size: clamp(2.25rem, 6vw, 3.25rem); line-height: 1.05; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 1rem; }
+  .lede { color: var(--muted); max-width: 34rem; margin: 0 0 2rem; }
+  .subscribe { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; padding: 1rem; background: var(--wash); border-radius: 10px; }
+  .subscribe code { flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere; font: 500 0.95rem/1.4 Figtree, system-ui, sans-serif; }
+  button, .button {
+    font: 500 0.95rem/1 Figtree, system-ui, sans-serif;
+    padding: 0.7rem 1rem; border-radius: 6px; cursor: pointer; text-decoration: none;
+    border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+  }
+  .button.secondary { background: transparent; color: var(--accent); }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .hint { color: var(--muted); font-size: 0.9rem; margin: 0.75rem 0 0; }
+  h2 { font-size: 1.25rem; margin: 4rem 0 1.5rem; }
+  ol { list-style: none; margin: 0; padding: 0; }
+  .day { display: grid; grid-template-columns: 9.5rem 1fr; gap: 1.5rem; padding: 1.75rem 0; border-top: 1px solid var(--rule); }
+  .day time { color: var(--muted); font-size: 0.95rem; font-variant-numeric: tabular-nums; padding-top: 0.2rem; }
+  article + article { margin-top: 1.75rem; }
+  h3 { font-size: 1.125rem; line-height: 1.35; margin: 0 0 0.4rem; }
+  h3 a { color: var(--ink); text-decoration-color: var(--rule); text-underline-offset: 3px; }
+  h3 a:hover { text-decoration-color: var(--accent); }
+  .body p { margin: 0 0 0.6rem; }
+  .body ul { margin: 0 0 0.6rem; padding-left: 1.2rem; }
+  .body a { color: var(--accent); }
+  footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.95rem; }
+  footer a { color: var(--accent); }
+  @media (max-width: 36rem) {
+    main { padding-top: 2.5rem; }
+    .day { grid-template-columns: 1fr; gap: 0.5rem; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>${esc(FEED.title)}</h1>
+  <p class="lede">Get new features and improvements as they ship. Add the feed below to Slack or any RSS reader.</p>
+
+  <div class="subscribe">
+    <code id="feed-url">${esc(FEED.self)}</code>
+    <button type="button" id="copy">Copy feed URL</button>
+    <a class="button secondary" href="${esc(FEED.self)}">Open feed</a>
+  </div>
+  <p class="hint" id="status" role="status" aria-live="polite">Updated within an hour of each release.</p>
+
+  <h2>Latest updates</h2>
+  <ol>${dayHtml}
+  </ol>
+
+  <footer>
+    <a href="${esc(FEED.link)}">See every update on the What's new page</a>
+  </footer>
+</main>
+<script>
+  document.getElementById("copy").addEventListener("click", async () => {
+    const status = document.getElementById("status");
+    const url = document.getElementById("feed-url").textContent;
+    try {
+      await navigator.clipboard.writeText(url);
+      status.textContent = "Feed URL copied. Paste it into your reader to subscribe.";
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(document.getElementById("feed-url"));
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      status.textContent = "Press Ctrl+C or Cmd+C to copy the selected URL.";
+    }
+  });
+</script>
+</body>
+</html>
+`;
+}
+
 async function loadUpdates() {
   if (/^https?:\/\//.test(SOURCE)) {
     const res = await fetch(SOURCE);
@@ -108,6 +255,7 @@ async function loadUpdates() {
   if (!items.length) throw new Error("No items found. Check SOURCE and database rules.");
   fs.mkdirSync(OUT_DIR, { recursive: true });
   fs.writeFileSync(path.join(OUT_DIR, "feed.xml"), buildFeed(items));
+  fs.writeFileSync(path.join(OUT_DIR, "index.html"), buildIndex(items));
   console.log(`Wrote ${items.length} items, newest ${items[0].date.toISOString().slice(0, 10)}`);
 })().catch((err) => {
   console.error(err.message);
