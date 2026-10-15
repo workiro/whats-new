@@ -12,8 +12,8 @@ const OUT_DIR = process.env.OUT_DIR || "_site";
 
 const FEED = {
   title: "What's new in Workiro",
-  link: "https://example.com/whats-new",                  // human-facing page (set this)
-  self: "https://YOUR-ORG.github.io/YOUR-REPO/feed.xml",  // this feed's URL (set this)
+  link: "https://app.workiro.com/settings/whatsnew",                  // human-facing page (set this)
+  self: "https://workiro.github.io/whats-new/feed.xml",  // this feed's URL (set this)
   description: "Product updates from Workiro",
   maxItems: 50,
 };
