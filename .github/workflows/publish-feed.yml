@@ -1,0 +1,57 @@
+name: Publish What's New RSS feed
+
+on:
+  schedule:
+    - cron: "17 * * * *"   # hourly, off the top of the hour to avoid queue delays
+  workflow_dispatch:        # "Run workflow" button for manual publishes
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - run: node build-feed.js
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  # GitHub disables scheduled workflows in public repos after 60 days without a commit.
+  # This job makes an empty commit only when the last commit is 50+ days old,
+  # so history gets at most one "keepalive" commit every 50 days.
+  # Separate job: runs even if the feed build fails, and only this job can write to the repo.
+  keepalive:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Commit if the repo has been idle for 50 days
+        run: |
+          last=$(git log -1 --format=%ct)
+          now=$(date +%s)
+          days=$(( (now - last) / 86400 ))
+          echo "Last commit was $days days ago"
+          if [ "$days" -ge 50 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "chore: keepalive for scheduled feed workflow"
+            git push
+          fi
