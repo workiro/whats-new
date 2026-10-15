@@ -16,8 +16,11 @@ A GitHub Actions workflow (`.github/workflows/publish-feed.yml`) runs every hour
 1. Fetches the update data from the public Firebase endpoint `https://scim-whats-new.firebaseio.com/updates.json`.
 2. Runs `build-feed.js`, which writes two files to `_site/`:
    - `feed.xml`: an RSS 2.0 feed of the latest 50 updates
-   - `index.html`: a landing page with a copy-the-feed-URL button and the latest 12 updates
+   - `index.html`: a landing page in Workiro's brand styling, with a copy-the-feed-URL button and the latest 12 updates
+   - `logo.svg` and `favicon.png`: downloaded from Workiro's website at build time, so visitors make no requests to third parties
 3. Deploys `_site/` to GitHub Pages.
+
+If the logo or icon can't be downloaded, the page still publishes with a text wordmark in place of the logo.
 
 If the fetch fails or returns no updates, the run fails without deploying, so the last good feed stays live.
 
@@ -27,7 +30,7 @@ There is no server and no database access beyond a public read. Nothing in this 
 
 ## Publishing an update
 
-Add the update in Wórkiro. It appears in the feed within about an hour. To publish immediately, go to **Actions → Publish What's New RSS feed → Run workflow**.
+Add the update in Firebase as usual. It appears in the feed within about an hour. To publish immediately, go to **Actions → Publish What's New RSS feed → Run workflow**.
 
 The data looks like this:
 
@@ -64,6 +67,17 @@ Settings live in the `FEED` block at the top of `build-feed.js`.
 | `pageItems` | Number of updates shown on the landing page |
 
 The data source can be overridden with the `SOURCE` environment variable.
+
+Branding lives in the `BRAND` block, just above the landing page code.
+
+| Setting | Purpose |
+|---|---|
+| `logoUrl`, `iconUrl` | Where the logo and favicon are downloaded from at build time |
+| `home`, `help` | Links in the page header and footer |
+| `fontFamily` | CSS font stack for the page |
+| `fontCssUrl` | Optional web font stylesheet URL. Leave empty to use only installed fonts |
+
+Colours follow the Workiro brand palette: Green `#00B1B2` for buttons and accents, a darker `#007A7B` for link text so it meets WCAG AA contrast on white, and Purple `#7E49E7` for focus outlines and hover states.
 
 ## Running locally
 
